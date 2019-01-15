@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -102,3 +103,11 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+=======
+*~
+*.egg-info/
+*.pyc
+build/
+dist/
+venv/
+>>>>>>> e6012d2... initial commit
