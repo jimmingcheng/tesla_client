@@ -4,7 +4,6 @@ from collections import namedtuple
 
 
 HOST = 'https://owner-api.teslamotors.com'
-DEFAULT_TOKEN_EXPIRY = 86400 * 5
 
 
 OAuthCredentials = namedtuple('OAuthCredentials', (
@@ -83,7 +82,7 @@ class Account(APIClient):
         return OAuthCredentials(
             access_token=new_creds['access_token'],
             refresh_token=new_creds['refresh_token'],
-            token_expiry=int(time.time()) + DEFAULT_TOKEN_EXPIRY,
+            token_expiry=new_creds['created_at'] + new_creds['expires_in'],
         )
 
     def login(self, email, password):
@@ -105,7 +104,7 @@ class Account(APIClient):
             OAuthCredentials(
                 access_token=creds['access_token'],
                 refresh_token=creds['refresh_token'],
-                token_expiry=int(time.time()) + creds['expires_in'],
+                token_expiry=creds['created_at'] + creds['expires_in'],
             )
         )
 
