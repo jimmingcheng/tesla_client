@@ -35,6 +35,7 @@ class APIClient():
                 'Content-type': 'application/json',
             },
         )
+        resp.raise_for_status()
         return resp.json()
 
     def api_post(self, endpoint, json=None):
@@ -46,6 +47,7 @@ class APIClient():
             },
             json=json,
         )
+        resp.raise_for_status()
         return resp.json()
 
 

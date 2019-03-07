@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='tesla_client',
-    version='1.0.1',
+    version='1.0.2',
     description='Tesla API Client',
     long_description=long_description,
     long_description_content_type="text/markdown",
