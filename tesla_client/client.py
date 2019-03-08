@@ -13,6 +13,10 @@ OAuthCredentials = namedtuple('OAuthCredentials', (
 ))
 
 
+class AuthenticationError(Exception):
+    pass
+
+
 _client_id = None
 _client_secret = None
 
@@ -35,7 +39,13 @@ class APIClient():
                 'Content-type': 'application/json',
             },
         )
-        resp.raise_for_status()
+
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as ex:
+            if ex.response.status_code in (401, 403):
+                raise AuthenticationError
+
         return resp.json()
 
     def api_post(self, endpoint, json=None):
@@ -47,7 +57,13 @@ class APIClient():
             },
             json=json,
         )
-        resp.raise_for_status()
+
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as ex:
+            if ex.response.status_code in (401, 403):
+                raise AuthenticationError
+
         return resp.json()
 
 
