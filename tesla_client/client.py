@@ -97,6 +97,9 @@ class Account(APIClient):
             },
         ).json()
 
+        if new_creds['error']:
+            raise AuthenticationError
+
         return OAuthCredentials(
             access_token=new_creds['access_token'],
             refresh_token=new_creds['refresh_token'],
