@@ -4,6 +4,8 @@ mock
 mypy
 pytest
 requests
+requests-mock
 setuptools
 twine
+types-mock
 types-requests

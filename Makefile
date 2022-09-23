@@ -5,6 +5,7 @@ venv: requirements-dev.txt
 .PHONY: test
 test: venv
 	venv/bin/pytest tests/
+	touch venv
 
 .PHONY: package
 package: venv
