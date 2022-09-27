@@ -15,6 +15,10 @@ class AuthenticationError(Exception):
     pass
 
 
+class VehicleNotFoundError(Exception):
+    pass
+
+
 class VehicleError(Exception):
     def __init__(self, vehicle: 'Vehicle') -> None:
         self.vehicle = vehicle
@@ -86,6 +90,13 @@ class Account(APIClient):
             Vehicle(self, vehicle_json, self.wait_for_wake)
             for vehicle_json in vehicles_json
         ]
+
+    def get_vehicle_by_id(self, vehicle_id: str) -> 'Vehicle':
+        id_to_vehicle = {v.id: v for v in self.get_vehicles()}
+        vehicle = id_to_vehicle.get(vehicle_id)
+        if not vehicle:
+            raise VehicleNotFoundError
+        return vehicle
 
 
 class Vehicle(APIClient):

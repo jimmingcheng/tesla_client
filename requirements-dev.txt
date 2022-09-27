@@ -9,3 +9,4 @@ setuptools
 twine
 types-mock
 types-requests
+types-setuptools

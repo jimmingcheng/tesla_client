@@ -1,11 +1,13 @@
 from setuptools import setup
 
+
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+
 setup(
     name='tesla_client',
-    version='2.1.0',
+    version='2.2.0',
     description='Tesla API Client',
     long_description=long_description,
     long_description_content_type="text/markdown",
