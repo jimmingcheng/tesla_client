@@ -8,7 +8,18 @@ from abc import ABCMeta
 from abc import abstractmethod
 
 
-HOST = 'https://owner-api.teslamotors.com'
+HOST = 'https://fleet-api.prd.na.vn.cloud.tesla.com'
+VEHICLE_DATA_ENDPOINTS_QS = '%3B'.join([
+    'charge_state',
+    'climate_state',
+    'closures_state',
+    'drive_state',
+    'gui_settings',
+    'location_data',
+    'vehicle_config',
+    'vehicle_state',
+    'vehicle_data_combo',
+])
 
 
 class AuthenticationError(Exception):
@@ -204,14 +215,14 @@ class Vehicle(APIClient):
     def get_vehicle_data(self, wait_for_wake: Optional[bool] = None, do_not_wake: bool = False) -> dict:
         if do_not_wake:
             resp_json = super().api_get(
-                '/api/1/vehicles/{}/vehicle_data'.format(self.id),
+                f'/api/1/vehicles/{self.id}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}'
             )['response']
             if not resp_json:
                 raise VehicleAsleepError(self)
             return resp_json
         else:
             return self.api_get(
-                '/api/1/vehicles/{}/vehicle_data'.format(self.id),
+                f'/api/1/vehicles/{self.id}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
                 wait_for_wake=wait_for_wake
             )['response']
 
