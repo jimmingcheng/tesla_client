@@ -32,6 +32,14 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 3.1.0
+
+- Support Vehicle Command SDK
+
+### 3.0.0
+
+- Use official Tesla Fleet API
+
 ### 2.0.0
 
 - Tesla removed support for grant_type=password. This version uses grant_type=authorization_code

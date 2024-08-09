@@ -48,17 +48,21 @@ class VehicleNotLoadedError(VehicleError):
 
 
 class APIClient(metaclass=ABCMeta):
+    def __init__(self, api_host: str = HOST) -> None:
+        self.api_host = api_host
+
     @abstractmethod
     def get_access_token(self) -> str:
         pass
 
     def api_get(self, endpoint: str) -> dict:
         resp = requests.get(
-            HOST + endpoint,
+            self.api_host + endpoint,
             headers={
                 'Authorization': 'Bearer ' + self.get_access_token(),
                 'Content-type': 'application/json',
             },
+            verify=False,
         )
 
         try:
@@ -71,12 +75,13 @@ class APIClient(metaclass=ABCMeta):
 
     def api_post(self, endpoint: str, json: Optional[dict] = None) -> dict:
         resp = requests.post(
-            HOST + endpoint,
+            self.api_host + endpoint,
             headers={
                 'Authorization': 'Bearer ' + self.get_access_token(),
                 'Content-type': 'application/json',
             },
             json=json,
+            verify=False,
         )
 
         try:
@@ -89,7 +94,8 @@ class APIClient(metaclass=ABCMeta):
 
 
 class Account(APIClient):
-    def __init__(self, wait_for_wake: bool = True) -> None:
+    def __init__(self, api_host: str = HOST, wait_for_wake: bool = True) -> None:
+        super().__init__(api_host)
         self.wait_for_wake = wait_for_wake
 
     def get_vehicles(self) -> List['Vehicle']:
@@ -98,7 +104,7 @@ class Account(APIClient):
         )['response']
 
         return [
-            Vehicle(self, vehicle_json, self.wait_for_wake)
+            Vehicle(self, vehicle_json, self.api_host, self.wait_for_wake)
             for vehicle_json in vehicles_json
         ]
 
@@ -115,8 +121,11 @@ class Vehicle(APIClient):
         self,
         account: Account,
         vehicle_json: dict,
+        api_host: str = HOST,
         wait_for_wake: bool = True,
     ) -> None:
+        super().__init__(api_host)
+
         self.account = account
         self.id = vehicle_json['id']
         self.display_name = vehicle_json['display_name']
