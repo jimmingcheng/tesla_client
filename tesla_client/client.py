@@ -108,9 +108,9 @@ class Account(APIClient):
             for vehicle_json in vehicles_json
         ]
 
-    def get_vehicle_by_id(self, vehicle_id: str) -> 'Vehicle':
-        id_to_vehicle = {v.id: v for v in self.get_vehicles()}
-        vehicle = id_to_vehicle.get(vehicle_id)
+    def get_vehicle_by_vin(self, vin: str) -> 'Vehicle':
+        vin_to_vehicle = {v.vin: v for v in self.get_vehicles()}
+        vehicle = vin_to_vehicle.get(vin)
         if not vehicle:
             raise VehicleNotFoundError
         return vehicle
@@ -127,7 +127,7 @@ class Vehicle(APIClient):
         super().__init__(api_host)
 
         self.account = account
-        self.id = vehicle_json['id']
+        self.vin = vehicle_json['vin']
         self.display_name = vehicle_json['display_name']
         self.wait_for_wake = wait_for_wake
         self.cached_vehicle_data: Optional[dict] = None
@@ -181,7 +181,7 @@ class Vehicle(APIClient):
 
     def _wake_up(self) -> dict:
         return super().api_post(
-            '/api/1/vehicles/{}/wake_up'.format(self.id)
+            '/api/1/vehicles/{}/wake_up'.format(self.vin)
         )['response']
 
     def _wait_for_wake_up(
@@ -224,29 +224,29 @@ class Vehicle(APIClient):
     def get_vehicle_data(self, wait_for_wake: Optional[bool] = None, do_not_wake: bool = False) -> dict:
         if do_not_wake:
             resp_json = super().api_get(
-                f'/api/1/vehicles/{self.id}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}'
+                f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}'
             )['response']
             if not resp_json:
                 raise VehicleAsleepError(self)
             return resp_json
         else:
             return self.api_get(
-                f'/api/1/vehicles/{self.id}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
+                f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
                 wait_for_wake=wait_for_wake
             )['response']
 
     def get_nearby_charging_sites(self) -> dict:
         return self.api_get(
-            '/api/1/vehicles/{}/nearby_charging_sites'.format(self.id)
+            '/api/1/vehicles/{}/nearby_charging_sites'.format(self.vin)
         )['response']
 
     def data_request(self, resource) -> dict:
         return self.api_get(
-            '/api/1/vehicles/{}/data_request/{}'.format(self.id, resource)
+            '/api/1/vehicles/{}/data_request/{}'.format(self.vin, resource)
         )['response']
 
     def command(self, command, json=None) -> dict:
         return self.api_post(
-            '/api/1/vehicles/{}/command/{}'.format(self.id, command),
+            '/api/1/vehicles/{}/command/{}'.format(self.vin, command),
             json=json,
         )['response']

@@ -9,7 +9,7 @@ from tesla_client.client import VehicleDidNotWakeError
 
 
 ACCESS_TOKEN = 'aCCESStOKEN'
-VEHICLE_ID = '123'
+VIN = '5YJ3E1EA7HF000000'
 VEHICLE_NAME = 'Red Car'
 
 
@@ -17,7 +17,7 @@ VEHICLE_NAME = 'Red Car'
 def mock_vehicle():
     return Vehicle(
         account=mock.Mock(get_access_token=mock.Mock(return_value=ACCESS_TOKEN)),
-        vehicle_json={'id': VEHICLE_ID, 'display_name': VEHICLE_NAME},
+        vehicle_json={'vin': VIN, 'display_name': VEHICLE_NAME},
     )
 
 
@@ -26,7 +26,7 @@ class Test_wake_up:
         expected_response = {'state': 'asleep'}
         with requests_mock.Mocker() as m:
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/wake_up',
+                f'{HOST}/api/1/vehicles/{VIN}/wake_up',
                 response_list=[
                     {'json': {'response': expected_response}, 'status_code': 200},
                 ]
@@ -36,7 +36,7 @@ class Test_wake_up:
     def test_with_wait(self, mock_vehicle: Vehicle) -> None:
         with requests_mock.Mocker() as m:
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/wake_up',
+                f'{HOST}/api/1/vehicles/{VIN}/wake_up',
                 response_list=[
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
@@ -48,7 +48,7 @@ class Test_wake_up:
     def test_wait_failed(self, mock_vehicle: Vehicle) -> None:
         with requests_mock.Mocker() as m:
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/wake_up',
+                f'{HOST}/api/1/vehicles/{VIN}/wake_up',
                 response_list=[
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
@@ -64,7 +64,7 @@ class Test_load_vehicle_data:
     def test_do_not_wake_asleep(self, mock_vehicle: Vehicle) -> None:
         with requests_mock.Mocker() as m:
             m.get(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/vehicle_data',
+                f'{HOST}/api/1/vehicles/{VIN}/vehicle_data',
                 json={'response': None},
             )
 
@@ -75,7 +75,7 @@ class Test_load_vehicle_data:
         battery_range = 123.45
         with requests_mock.Mocker() as m:
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/wake_up',
+                f'{HOST}/api/1/vehicles/{VIN}/wake_up',
                 response_list=[
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
                     {'json': {'response': {'state': 'online'}}, 'status_code': 200},
@@ -83,7 +83,7 @@ class Test_load_vehicle_data:
             )
 
             m.get(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/vehicle_data',
+                f'{HOST}/api/1/vehicles/{VIN}/vehicle_data',
                 response_list=[
                     {'json': {'response': None}, 'status_code': 200},
                     {'json': {'response': {'charge_state': {'battery_range': battery_range}}, 'status_code': 200}},
@@ -98,7 +98,7 @@ class Test_load_vehicle_data:
         latitude = 33.111111
         with requests_mock.Mocker() as m:
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/wake_up',
+                f'{HOST}/api/1/vehicles/{VIN}/wake_up',
                 response_list=[
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
                     {'json': {'response': {'state': 'online'}}, 'status_code': 200},
@@ -106,7 +106,7 @@ class Test_load_vehicle_data:
             )
 
             m.get(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/vehicle_data',
+                f'{HOST}/api/1/vehicles/{VIN}/vehicle_data',
                 response_list=[
                     {'json': {'response': None}, 'status_code': 200},
                     {'json': {'response': {
@@ -126,14 +126,14 @@ class Test_command:
     def test_waits_for_wake_and_executes(self, mock_vehicle: Vehicle) -> None:
         with requests_mock.Mocker() as m:
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/wake_up',
+                f'{HOST}/api/1/vehicles/{VIN}/wake_up',
                 response_list=[
                     {'json': {'response': {'state': 'asleep'}}, 'status_code': 200},
                     {'json': {'response': {'state': 'online'}}, 'status_code': 200},
                 ]
             )
             m.post(
-                f'{HOST}/api/1/vehicles/{VEHICLE_ID}/command/door_lock',
+                f'{HOST}/api/1/vehicles/{VIN}/command/door_lock',
                 response_list=[
                     {'json': {'response': None}, 'status_code': 200},
                     {'json': {'response': {'result': 'true'}}, 'status_code': 200},
