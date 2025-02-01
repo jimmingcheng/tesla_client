@@ -32,6 +32,10 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 4.0.0
+
+- Refactor with clearer and better typed interface for use by AI Agents
+
 ### 3.1.0
 
 - Support Vehicle Command SDK

@@ -1,11 +1,11 @@
-import mock
 import pytest
 import requests_mock
 
+from tesla_client.client import APIClient
 from tesla_client.client import HOST
-from tesla_client.client import Vehicle
-from tesla_client.client import VehicleAsleepError
-from tesla_client.client import VehicleDidNotWakeError
+from tesla_client.vehicle import Vehicle
+from tesla_client.vehicle import VehicleAsleepError
+from tesla_client.vehicle import VehicleDidNotWakeError
 
 
 ACCESS_TOKEN = 'aCCESStOKEN'
@@ -16,7 +16,7 @@ VEHICLE_NAME = 'Red Car'
 @pytest.fixture
 def mock_vehicle():
     return Vehicle(
-        account=mock.Mock(get_access_token=mock.Mock(return_value=ACCESS_TOKEN)),
+        client=APIClient(ACCESS_TOKEN),
         vehicle_json={'vin': VIN, 'display_name': VEHICLE_NAME},
     )
 
@@ -31,7 +31,7 @@ class Test_wake_up:
                     {'json': {'response': expected_response}, 'status_code': 200},
                 ]
             )
-            assert mock_vehicle.wake_up(wait_for_wake=False) == expected_response
+            mock_vehicle.wake_up(wait_for_wake=False)
 
     def test_with_wait(self, mock_vehicle: Vehicle) -> None:
         with requests_mock.Mocker() as m:
@@ -43,7 +43,7 @@ class Test_wake_up:
                     {'json': {'response': {'state': 'online'}}, 'status_code': 200},
                 ]
             )
-            assert mock_vehicle.wake_up(wait_for_wake=True) == {'state': 'online'}
+            mock_vehicle.wake_up(wait_for_wake=True)
 
     def test_wait_failed(self, mock_vehicle: Vehicle) -> None:
         with requests_mock.Mocker() as m:
@@ -140,4 +140,4 @@ class Test_command:
                 ],
             )
 
-            assert mock_vehicle.command('door_lock') == {'result': 'true'}
+            mock_vehicle.door_lock()
