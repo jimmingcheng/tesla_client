@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "tesla-client"
-version = "4.0.1"
+version = "4.0.2"
 description = ""
 authors = ["Jimming Cheng <jimming@gmail.com>"]
 readme = "README.md"
 packages = [{include = "tesla_client"}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.9"
 requests = "^2.31.0"
 
 [tool.poetry.group.dev.dependencies]

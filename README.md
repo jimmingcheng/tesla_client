@@ -32,6 +32,10 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 4.0.2
+
+- Relax python version requirement to 3.9
+
 ### 4.0.1
 
 - Increase wait time for vehicle wake up
