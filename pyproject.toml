@@ -1,19 +1,17 @@
 [tool.poetry]
 name = "tesla-client"
-version = "0.1.0"
+version = "4.0.1"
 description = ""
 authors = ["Jimming Cheng <jimming@gmail.com>"]
 readme = "README.md"
+packages = [{include = "tesla_client"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
 requests = "^2.31.0"
 
-
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
-wheel = "^0.42.0"
-twine = "^4.0.2"
 types-mock = "^5.1.0.20240106"
 types-requests = "^2.31.0.20240125"
 types-setuptools = "^69.0.0.20240125"

@@ -32,6 +32,11 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 4.0.1
+
+- Increase wait time for vehicle wake up
+- Make sure navigation requests use direct API host instead of vcmd proxy
+
 ### 4.0.0
 
 - Refactor with clearer and better typed interface for use by AI Agents

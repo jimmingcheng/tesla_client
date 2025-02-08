@@ -91,7 +91,7 @@ class Test_load_vehicle_data:
             )
 
             mock_vehicle.load_vehicle_data(wait_for_wake=True, do_not_wake=False)
-            assert mock_vehicle.charge_state['battery_range'] == battery_range
+            assert mock_vehicle.get_charge_state().battery_range == battery_range
 
     def test_fills_vehicle_attrs(self, mock_vehicle: Vehicle) -> None:
         battery_range = 123.45
@@ -118,8 +118,8 @@ class Test_load_vehicle_data:
 
             mock_vehicle.load_vehicle_data(wait_for_wake=True, do_not_wake=False)
 
-            assert mock_vehicle.charge_state['battery_range'] == battery_range
-            assert mock_vehicle.drive_state['latitude'] == latitude
+            assert mock_vehicle.get_charge_state().battery_range == battery_range
+            assert mock_vehicle.get_drive_state().latitude == latitude
 
 
 class Test_command:

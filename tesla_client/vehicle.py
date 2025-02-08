@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing import Any
 
 import time
 
 from .client import APIClient
+from .client import HOST
 
 
 class VehicleNotFoundError(Exception):
@@ -161,7 +161,7 @@ class Vehicle(APIClient):
 
     def _wait_for_wake_up(
         self,
-        retry_interval_seconds: list[int] = [1, 1, 1, 2, 5, 5, 5, 5, 5]
+        retry_interval_seconds: list[int] = [1, 1, 1, 2, 5, 5, 5, 5, 5, 10, 10, 10, 20, 20]
     ) -> None:
         tries = 0
         for secs in retry_interval_seconds:
@@ -190,11 +190,6 @@ class Vehicle(APIClient):
             wait_for_wake=wait_for_wake,
             do_not_wake=do_not_wake,
         )
-
-    def __getattr__(self, name: Any) -> Any:
-        if not self.cached_vehicle_data:
-            raise VehicleNotLoadedError(self)
-        return self.cached_vehicle_data[name]
 
     def get_charge_state(self) -> ChargeState:
         if not self.cached_vehicle_data:
@@ -301,15 +296,19 @@ class Vehicle(APIClient):
         self._command('honk_horn')
 
     def navigation_request(self, location_and_address: str) -> None:
-        nav_request_payload = {
-            'type': 'share_ext_content_raw',
-            'locale': 'en-US',
-            'timestamp_ms': int(time.time() * 1000),
-            'value': {
-                'android.intent.extra.TEXT': location_and_address,
+        # navigation requests are special and should go directly to the API HOST instead of being
+        # routed through the vcmd proxy
+        APIClient(self.client.access_token, HOST).api_post(
+            '/api/1/vehicles/{}/command/navigation_request'.format(self.vin),
+            json={
+                'type': 'share_ext_content_raw',
+                'locale': 'en-US',
+                'timestamp_ms': int(time.time() * 1000),
+                'value': {
+                    'android.intent.extra.TEXT': location_and_address,
+                },
             },
-        }
-        self._command('navigation_request', json=nav_request_payload)
+        )
 
     def set_charge_limit(self, percent: int) -> None:
         self._command('set_charge_limit', json={'percent': percent})
