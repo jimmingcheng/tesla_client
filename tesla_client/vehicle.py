@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 
 import time
+from requests.exceptions import HTTPError
 
 from .client import APIClient
 from .client import HOST
+
+
+LEGACY_FLEET_TELEMETRY_VERSION = 'unknown'
 
 
 class VehicleNotFoundError(Exception):
@@ -38,7 +42,6 @@ class ChargeState:
     charge_limit_soc: float
     charging_state: str
     fast_charger_present: bool
-    minutes_to_full_charge: float | None
     time_to_full_charge: float | None
 
 
@@ -76,7 +79,7 @@ class VehicleState:
     vehicle_name: str
 
 
-class Vehicle(APIClient):
+class Vehicle:
     DOC_WHITELIST = [
         'vin',
         'display_name',
@@ -96,7 +99,8 @@ class Vehicle(APIClient):
     vin: str
     display_name: str
     wait_for_wake: bool
-    cached_vehicle_data: dict | None
+    _fleet_telemetry_version: str | None
+    _cached_vehicle_data: dict
 
     def __init__(
         self,
@@ -108,7 +112,8 @@ class Vehicle(APIClient):
         self.vin = vehicle_json['vin']
         self.display_name = vehicle_json['display_name']
         self.wait_for_wake = wait_for_wake
-        self.cached_vehicle_data: dict | None = None
+        self._fleet_telemetry_version = None
+        self._cached_vehicle_data: dict = {}
 
     def _api_get(
         self,
@@ -117,7 +122,10 @@ class Vehicle(APIClient):
     ) -> dict:
         wait_for_wake = wait_for_wake if wait_for_wake is not None else self.wait_for_wake
 
-        resp_json = self.client.api_get(endpoint)
+        try:
+            resp_json = self.client.api_get(endpoint)
+        except HTTPError:
+            resp_json = None
 
         if resp_json and resp_json.get('response'):
             return resp_json
@@ -185,59 +193,60 @@ class Vehicle(APIClient):
         except VehicleAsleepError:
             return False
 
+    def get_fleet_telemetry_version(self) -> str:
+        if self._fleet_telemetry_version is None:
+            self._fleet_telemetry_version = self.fetch_fleet_telemetry_version()
+        return self._fleet_telemetry_version
+
+    def fetch_fleet_telemetry_version(self) -> str:
+        resp_json = self.client.api_post(
+            '/api/1/vehicles/fleet_status',
+            json={'vins': [self.vin]}
+        )
+        return resp_json['response']['vehicle_info'][self.vin]['fleet_telemetry_version']
+
+    def get_cached_vehicle_data(self) -> dict:
+        return self._cached_vehicle_data
+
+    def set_cached_vehicle_data(self, vehicle_data: dict) -> None:
+        self._cached_vehicle_data = vehicle_data
+
     def load_vehicle_data(self, wait_for_wake: bool | None = None, do_not_wake: bool = False) -> None:
-        self.cached_vehicle_data = self._get_vehicle_data(
-            wait_for_wake=wait_for_wake,
-            do_not_wake=do_not_wake,
+        self.set_cached_vehicle_data(
+            self._get_vehicle_data(
+                wait_for_wake=wait_for_wake,
+                do_not_wake=do_not_wake,
+            )
         )
 
-    def get_charge_state(self) -> ChargeState:
-        if not self.cached_vehicle_data:
-            self.load_vehicle_data(wait_for_wake=True)
-        if not self.cached_vehicle_data:
-            raise VehicleNotLoadedError(self)
+    def _get_data_for_state(self, state_key: str, state_class: type) -> type:
+        cvd = self.get_cached_vehicle_data()
 
-        charge_state_dict = self.cached_vehicle_data['charge_state']
-        return ChargeState(**{
-            k: charge_state_dict.get(k)
-            for k in ChargeState.__annotations__
-        })
+        for attempt in range(3):
+            try:
+                data = state_class(**{  # type: ignore
+                    k: cvd[state_key].get(k)
+                    for k in state_class.__annotations__
+                })
+            except KeyError:
+                if attempt < 2:
+                    self.load_vehicle_data(wait_for_wake=True)
+                else:
+                    raise VehicleNotLoadedError(self)
+
+        return data
+
+    def get_charge_state(self) -> ChargeState:
+        return self._get_data_for_state('charge_state', ChargeState)  # type: ignore
 
     def get_climate_state(self) -> ClimateState:
-        if not self.cached_vehicle_data:
-            self.load_vehicle_data(wait_for_wake=True)
-        if not self.cached_vehicle_data:
-            raise VehicleNotLoadedError(self)
-
-        climate_state_dict = self.cached_vehicle_data['climate_state']
-        return ClimateState(**{
-            k: climate_state_dict.get(k)
-            for k in ClimateState.__annotations__
-        })
+        return self._get_data_for_state('climate_state', ClimateState)  # type: ignore
 
     def get_drive_state(self) -> DriveState:
-        if not self.cached_vehicle_data:
-            self.load_vehicle_data(wait_for_wake=True)
-        if not self.cached_vehicle_data:
-            raise VehicleNotLoadedError(self)
-
-        drive_state_dict = self.cached_vehicle_data['drive_state']
-        return DriveState(**{
-            k: drive_state_dict.get(k)
-            for k in DriveState.__annotations__
-        })
+        return self._get_data_for_state('drive_state', DriveState)  # type: ignore
 
     def get_vehicle_state(self) -> VehicleState:
-        if not self.cached_vehicle_data:
-            self.load_vehicle_data(wait_for_wake=True)
-        if not self.cached_vehicle_data:
-            raise VehicleNotLoadedError(self)
-
-        vehicle_state_dict = self.cached_vehicle_data['vehicle_state']
-        return VehicleState(**{
-            k: vehicle_state_dict.get(k)
-            for k in VehicleState.__annotations__
-        })
+        return self._get_data_for_state('vehicle_state', VehicleState)  # type: ignore
 
     def _get_vehicle_data(self, wait_for_wake: bool | None = None, do_not_wake: bool = False) -> dict:
         VEHICLE_DATA_ENDPOINTS_QS = '%3B'.join([

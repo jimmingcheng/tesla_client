@@ -31,6 +31,8 @@ class APIClient:
         except requests.HTTPError as ex:
             if ex.response.status_code in (401, 403):
                 raise AuthenticationError
+            else:
+                raise
 
         return resp.json()
 
@@ -50,6 +52,8 @@ class APIClient:
         except requests.HTTPError as ex:
             if ex.response.status_code in (401, 403):
                 raise AuthenticationError
+            else:
+                raise
 
         try:
             return resp.json()
