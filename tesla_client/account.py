@@ -36,20 +36,18 @@ class Account:
     }
 
     client: APIClient
-    wait_for_wake: bool
     vehicle_cls: type[Vehicle] = Vehicle
 
-    def __init__(self, access_token: str, api_host: str = HOST, wait_for_wake: bool = True) -> None:
+    def __init__(self, access_token: str, api_host: str = HOST) -> None:
         self.client = APIClient(access_token, api_host)
-        self.wait_for_wake = wait_for_wake
 
     def get_vehicles(self) -> list[Vehicle]:
         vehicles_json = self.client.api_get(
             '/api/1/vehicles'
-        )['response']
+        ).json()['response']
 
         return [
-            self.vehicle_cls(self.client, vehicle_json, self.wait_for_wake)
+            self.vehicle_cls(self.client, vehicle_json)
             for vehicle_json in vehicles_json
         ]
 

@@ -1,6 +1,7 @@
+import logging
 from kafka import KafkaConsumer  # type: ignore
-
 from tesla_client.vehicle import Vehicle
+from tesla_client.vehicle import VehicleDidNotWakeError
 from tesla_client.vehicle_data_pb2 import (  # type: ignore
     DetailedChargeStateValue,
     Field,
@@ -23,8 +24,13 @@ class FleetTelemetryListener:
         kafka_group_id: str,
         kafka_topic: str = 'tesla_V',
     ) -> None:
+        logging.info('Starting ' + self.__class__.__name__)
+
         for vehicle in vehicles:
-            vehicle.load_vehicle_data(wait_for_wake=True)
+            try:
+                vehicle.load_vehicle_data()
+            except VehicleDidNotWakeError:
+                logging.warning(f'At startup, failed to wake and load vehicle {vehicle.vin}')
 
         self.vin_to_vehicle = {vehicle.vin: vehicle for vehicle in vehicles}
         self.vehicle_consumer = KafkaConsumer(
@@ -34,18 +40,32 @@ class FleetTelemetryListener:
         )
 
     def listen(self) -> None:
+        logging.info('Listening for fleet telemetry messages')
+
         while True:
             for message in self.vehicle_consumer:
                 payload = Payload.FromString(message.value)
-                self.handle_vehicle_message(payload)
+                try:
+                    self.handle_vehicle_message(payload)
+                except Exception:
+                    logging.exception(f'Error handling vehicle message for vehicle {payload.vin}')
 
     def handle_vehicle_message(self, payload: Payload) -> None:
         if payload.vin not in self.vin_to_vehicle:
+            logging.warning(f'Ignoring vehicle message for unknown vehicle {payload.vin}')
             return
+
+        logging.info(f'Handling vehicle message for vehicle {payload.vin}:\n{payload}')
 
         vehicle = self.vin_to_vehicle[payload.vin]
 
+        last_load_from_api = vehicle.get_last_load_from_api()
+        if not last_load_from_api:
+            vehicle.load_vehicle_data()
+
         data_dict = {datum.key: datum.value for datum in payload.data}
+
+        logging.info(f'data_dict: {data_dict}')
 
         cvd = vehicle.get_cached_vehicle_data()
 
@@ -128,8 +148,10 @@ class FleetTelemetryListener:
 
         if Field.Location in data_dict and data_dict[Field.Location]:
             location: LocationValue = data_dict[Field.Location].location_value
+            logging.info(f'Location: {location.latitude}, {location.longitude}')
             cvd['drive_state']['latitude'] = location.latitude
             cvd['drive_state']['longitude'] = location.longitude
+            logging.info(f'Set drive_state to: {location.latitude}, {location.longitude}')
 
         if Field.Gear in data_dict:
             shift_state = data_dict[Field.Gear].shift_state_value

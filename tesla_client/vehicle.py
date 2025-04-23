@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 
+import random
 import time
-from requests.exceptions import HTTPError
 
 from .client import APIClient
 from .client import HOST
+from .client import VehicleAsleepError
 
 
 LEGACY_FLEET_TELEMETRY_VERSION = 'unknown'
@@ -14,20 +15,11 @@ class VehicleNotFoundError(Exception):
     pass
 
 
-class VehicleError(Exception):
-    def __init__(self, vehicle: 'Vehicle') -> None:
-        self.vehicle = vehicle
-
-
-class VehicleAsleepError(VehicleError):
+class VehicleDidNotWakeError(Exception):
     pass
 
 
-class VehicleDidNotWakeError(VehicleError):
-    pass
-
-
-class VehicleNotLoadedError(VehicleError):
+class VehicleNotLoadedError(Exception):
     pass
 
 
@@ -98,7 +90,7 @@ class Vehicle:
     client: APIClient
     vin: str
     display_name: str
-    wait_for_wake: bool
+    online_as_of: int | None
     _fleet_telemetry_version: str | None
     _cached_vehicle_data: dict
 
@@ -106,92 +98,29 @@ class Vehicle:
         self,
         client: APIClient,
         vehicle_json: dict,
-        wait_for_wake: bool = True,
     ) -> None:
         self.client = client
         self.vin = vehicle_json['vin']
         self.display_name = vehicle_json['display_name']
-        self.wait_for_wake = wait_for_wake
+        self.online_as_of = int(time.time()) if vehicle_json['state'] == 'online' else None
         self._fleet_telemetry_version = None
         self._cached_vehicle_data: dict = {}
 
-    def _api_get(
-        self,
-        endpoint: str,
-        wait_for_wake: bool | None = None
-    ) -> dict:
-        wait_for_wake = wait_for_wake if wait_for_wake is not None else self.wait_for_wake
+    def wake_up(self) -> None:
+        for attempt in range(3):
+            # jitter to prevent burst of wakeup requests
+            time.sleep(random.uniform(2, 10))
 
-        try:
-            resp_json = self.client.api_get(endpoint)
-        except HTTPError:
-            resp_json = None
-
-        if resp_json and resp_json.get('response'):
-            return resp_json
-        elif wait_for_wake:
-            self.wake_up(wait_for_wake)
-            return self.client.api_get(endpoint)
-        else:
-            self.wake_up(wait_for_wake)
-            raise VehicleAsleepError(self)
-
-    def _api_post(
-        self,
-        endpoint: str,
-        json: dict | None = None,
-        wait_for_wake: bool | None = None
-    ) -> dict:
-        wait_for_wake = wait_for_wake if wait_for_wake is not None else self.wait_for_wake
-
-        resp_json = self.client.api_post(endpoint, json)
-        if resp_json and resp_json.get('response'):
-            return resp_json
-        elif wait_for_wake:
-            self.wake_up(wait_for_wake)
-            return self.client.api_post(endpoint, json)
-        else:
-            self.wake_up(wait_for_wake)
-            raise VehicleAsleepError(self)
-
-    def wake_up(self, wait_for_wake: bool | None = None) -> None:
-        wait_for_wake = wait_for_wake if wait_for_wake is not None else self.wait_for_wake
-
-        if wait_for_wake:
-            self._wait_for_wake_up()
-        else:
-            self._wake_up()
-
-    def _wake_up(self) -> dict | None:
-        return self.client.api_post(
-            '/api/1/vehicles/{}/wake_up'.format(self.vin)
-        )['response']
-
-    def _wait_for_wake_up(
-        self,
-        retry_interval_seconds: list[int] = [1, 1, 1, 2, 5, 5, 5, 5, 5, 10, 10, 10, 20, 20]
-    ) -> None:
-        tries = 0
-        for secs in retry_interval_seconds:
-            status = self._wake_up()
+            status = self.client.api_post(
+                '/api/1/vehicles/{}/wake_up'.format(self.vin)
+            ).json()['response']
             if status and status['state'] == 'online':
-                if tries > 0:
-                    # if the car wasn't awake already, wait another second
-                    time.sleep(1)
                 return
-            time.sleep(secs)
-            tries += 1
-        raise VehicleDidNotWakeError(self)
 
-    def is_awake(self) -> bool:
-        try:
-            self._get_vehicle_data(
-                wait_for_wake=False,
-                do_not_wake=True,
-            )
-            return True
-        except VehicleAsleepError:
-            return False
+        raise VehicleDidNotWakeError
+
+    def supports_fleet_telemetry(self) -> bool:
+        return self.get_fleet_telemetry_version() != LEGACY_FLEET_TELEMETRY_VERSION
 
     def get_fleet_telemetry_version(self) -> str:
         if self._fleet_telemetry_version is None:
@@ -202,7 +131,7 @@ class Vehicle:
         resp_json = self.client.api_post(
             '/api/1/vehicles/fleet_status',
             json={'vins': [self.vin]}
-        )
+        ).json()
         return resp_json['response']['vehicle_info'][self.vin]['fleet_telemetry_version']
 
     def get_cached_vehicle_data(self) -> dict:
@@ -211,13 +140,35 @@ class Vehicle:
     def set_cached_vehicle_data(self, vehicle_data: dict) -> None:
         self._cached_vehicle_data = vehicle_data
 
-    def load_vehicle_data(self, wait_for_wake: bool | None = None, do_not_wake: bool = False) -> None:
-        self.set_cached_vehicle_data(
-            self._get_vehicle_data(
-                wait_for_wake=wait_for_wake,
-                do_not_wake=do_not_wake,
-            )
-        )
+    def load_vehicle_data(self) -> None:
+        VEHICLE_DATA_ENDPOINTS_QS = '%3B'.join([
+            'charge_state',
+            'climate_state',
+            'closures_state',
+            'drive_state',
+            'gui_settings',
+            'location_data',
+            'vehicle_config',
+            'vehicle_state',
+            'vehicle_data_combo',
+        ])
+
+        try:
+            vehicle_data_from_api = self.client.api_get(
+                f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
+            ).json()['response']
+        except VehicleAsleepError:
+            self.wake_up()
+            vehicle_data_from_api = self.client.api_get(
+                f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
+            ).json()['response']
+
+        vehicle_data_from_api['last_load_from_api'] = int(time.time())
+
+        self.set_cached_vehicle_data(vehicle_data_from_api)
+
+    def get_last_load_from_api(self) -> int | None:
+        return self.get_cached_vehicle_data().get('last_load_from_api', None)
 
     def _get_data_for_state(self, state_key: str, state_class: type) -> type:
         cvd = self.get_cached_vehicle_data()
@@ -230,9 +181,9 @@ class Vehicle:
                 })
             except KeyError:
                 if attempt < 2:
-                    self.load_vehicle_data(wait_for_wake=True)
+                    self.load_vehicle_data()
                 else:
-                    raise VehicleNotLoadedError(self)
+                    raise VehicleNotLoadedError
 
         return data
 
@@ -248,37 +199,18 @@ class Vehicle:
     def get_vehicle_state(self) -> VehicleState:
         return self._get_data_for_state('vehicle_state', VehicleState)  # type: ignore
 
-    def _get_vehicle_data(self, wait_for_wake: bool | None = None, do_not_wake: bool = False) -> dict:
-        VEHICLE_DATA_ENDPOINTS_QS = '%3B'.join([
-            'charge_state',
-            'climate_state',
-            'closures_state',
-            'drive_state',
-            'gui_settings',
-            'location_data',
-            'vehicle_config',
-            'vehicle_state',
-            'vehicle_data_combo',
-        ])
-
-        if do_not_wake:
-            resp_json = self.client.api_get(
-                f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}'
-            )['response']
-            if not resp_json:
-                raise VehicleAsleepError(self)
-            return resp_json
-        else:
-            return self._api_get(
-                f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
-                wait_for_wake=wait_for_wake
-            )['response']
-
     def _command(self, command, json: dict | None = None) -> None:
-        self._api_post(
-            '/api/1/vehicles/{}/command/{}'.format(self.vin, command),
-            json=json,
-        )
+        try:
+            self.client.api_post(
+                '/api/1/vehicles/{}/command/{}'.format(self.vin, command),
+                json=json,
+            )
+        except VehicleAsleepError:
+            self.wake_up()
+            self.client.api_post(
+                '/api/1/vehicles/{}/command/{}'.format(self.vin, command),
+                json=json,
+            )
 
     def auto_conditioning_start(self) -> None:
         self._command('auto_conditioning_start')
