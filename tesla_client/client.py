@@ -59,7 +59,7 @@ class APIClient:
         except requests.HTTPError as ex:
             if ex.response.status_code in (401, 403):
                 raise AuthenticationError
-            elif ex.response.status_code == 408:
+            elif ex.response.status_code in (408, 500):
                 raise VehicleAsleepError
             else:
                 raise

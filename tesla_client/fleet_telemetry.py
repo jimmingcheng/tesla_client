@@ -1,11 +1,13 @@
+import copy
 import logging
+import time
+from typing import Any
 from kafka import KafkaConsumer  # type: ignore
 from tesla_client.vehicle import Vehicle
 from tesla_client.vehicle import VehicleDidNotWakeError
 from tesla_client.vehicle_data_pb2 import (  # type: ignore
     DetailedChargeStateValue,
     Field,
-    HvacAutoModeState,
     HvacPowerState,
     LocationValue,
     Payload,
@@ -68,17 +70,18 @@ class FleetTelemetryListener:
         logging.info(f'data_dict: {data_dict}')
 
         cvd = vehicle.get_cached_vehicle_data()
+        cvd_before = copy.deepcopy(cvd)
 
         # ChargeState
 
         if Field.BatteryLevel in data_dict:
-            cvd['charge_state']['battery_level'] = data_dict[Field.BatteryLevel].float_value
+            cvd['charge_state']['battery_level'] = data_dict[Field.BatteryLevel].double_value
 
         if Field.EstBatteryRange in data_dict:
-            cvd['charge_state']['battery_range'] = data_dict[Field.EstBatteryRange].float_value
+            cvd['charge_state']['battery_range'] = data_dict[Field.EstBatteryRange].double_value
 
         if Field.ChargeLimitSoc in data_dict:
-            cvd['charge_state']['charge_limit_soc'] = data_dict[Field.ChargeLimitSoc].float_value
+            cvd['charge_state']['charge_limit_soc'] = data_dict[Field.ChargeLimitSoc].int_value
 
         if Field.DetailedChargeState in data_dict and data_dict[Field.DetailedChargeState]:
             charge_state = data_dict[Field.DetailedChargeState].detailed_charge_state_value
@@ -102,19 +105,12 @@ class FleetTelemetryListener:
             cvd['charge_state']['fast_charger_present'] = data_dict[Field.FastChargerPresent].boolean_value
 
         if Field.TimeToFullCharge in data_dict:
-            cvd['charge_state']['time_to_full_charge'] = data_dict[Field.TimeToFullCharge].float_value
+            cvd['charge_state']['time_to_full_charge'] = data_dict[Field.TimeToFullCharge].double_value
 
         # ClimateState
 
         if Field.InsideTemp in data_dict:
-            cvd['climate_state']['inside_temp'] = data_dict[Field.InsideTemp].float_value
-
-        if Field.HvacAutoMode in data_dict:
-            hvac_auto_mode_state = data_dict[Field.HvacAutoMode].hvac_auto_mode_value
-            if hvac_auto_mode_state == HvacAutoModeState.HvacAutoModeOn:
-                cvd['climate_state']['is_auto_conditioning_on'] = True
-            elif hvac_auto_mode_state == HvacAutoModeState.HvacAutoModeOff:
-                cvd['climate_state']['is_auto_conditioning_on'] = False
+            cvd['climate_state']['inside_temp'] = data_dict[Field.InsideTemp].double_value
 
         if Field.HvacPower in data_dict:
             hvac_power_state = data_dict[Field.HvacPower].hvac_power_value
@@ -128,7 +124,7 @@ class FleetTelemetryListener:
                 cvd['climate_state']['is_climate_on'] = True
 
         if Field.OutsideTemp in data_dict:
-            cvd['climate_state']['outside_temp'] = data_dict[Field.OutsideTemp].float_value
+            cvd['climate_state']['outside_temp'] = data_dict[Field.OutsideTemp].double_value
 
         # DriveState
 
@@ -141,17 +137,15 @@ class FleetTelemetryListener:
             cvd['drive_state']['active_route_longitude'] = destination_location.longitude
 
         if Field.MinutesToArrival in data_dict:
-            cvd['drive_state']['active_route_minutes_to_arrival'] = data_dict[Field.MinutesToArrival].float_value
+            cvd['drive_state']['active_route_minutes_to_arrival'] = data_dict[Field.MinutesToArrival].double_value
 
         if Field.GpsHeading in data_dict:
-            cvd['drive_state']['heading'] = data_dict[Field.GpsHeading].float_value
+            cvd['drive_state']['heading'] = data_dict[Field.GpsHeading].double_value
 
         if Field.Location in data_dict and data_dict[Field.Location]:
             location: LocationValue = data_dict[Field.Location].location_value
-            logging.info(f'Location: {location.latitude}, {location.longitude}')
             cvd['drive_state']['latitude'] = location.latitude
             cvd['drive_state']['longitude'] = location.longitude
-            logging.info(f'Set drive_state to: {location.latitude}, {location.longitude}')
 
         if Field.Gear in data_dict:
             shift_state = data_dict[Field.Gear].shift_state_value
@@ -171,11 +165,26 @@ class FleetTelemetryListener:
                 cvd['drive_state']['shift_state'] = 'Invalid'
 
         if Field.VehicleSpeed in data_dict:
-            cvd['drive_state']['speed'] = data_dict[Field.VehicleSpeed].float_value
+            cvd['drive_state']['speed'] = data_dict[Field.VehicleSpeed].double_value
 
         # VehicleState
 
         if Field.Locked in data_dict:
             cvd['vehicle_state']['locked'] = data_dict[Field.Locked].boolean_value
 
+        cvd['last_update'] = int(time.time())
+
         vehicle.set_cached_vehicle_data(cvd)
+
+        for k1, v1 in cvd.items():
+            if isinstance(v1, dict):
+                for k2, v2 in v1.items():
+                    try:
+                        assert cvd_before[k1][k2] == v2
+                    except KeyError:
+                        self.notify_vehicle_data_changed(k1, k2, None, v2)
+                    except AssertionError:
+                        self.notify_vehicle_data_changed(k1, k2, cvd_before[k1][k2], v2)
+
+    def notify_vehicle_data_changed(self, k1: str, k2: str, value_before: Any, value_after: Any) -> None:
+        logging.info(f'Vehicle Data changed: {k1}.{k2}: {value_before} → {value_after}')

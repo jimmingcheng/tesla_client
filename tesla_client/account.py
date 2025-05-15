@@ -13,26 +13,26 @@ class Account:
     ]
 
     DEFAULT_FLEET_TELEMETRY_FIELDS = {
-        'BatteryLevel': {'interval_seconds': 1, 'minimum_delta': 5},
-        'ChargeLimitSoc': {'interval_seconds': 1},
+        'BatteryLevel': {'interval_seconds': 60, 'minimum_delta': 1.0},
+        'ChargeLimitSoc': {'interval_seconds': 60, 'minimum_delta': 1.0},
         'DestinationLocation': {'interval_seconds': 1},
         'DestinationName': {'interval_seconds': 1},
         'DetailedChargeState': {'interval_seconds': 1},
-        'EstBatteryRange': {'interval_seconds': 1, 'minimum_delta': 5},
+        'EstBatteryRange': {'interval_seconds': 60, 'minimum_delta': 1.0},
         'FastChargerPresent': {'interval_seconds': 1},
         'Gear': {'interval_seconds': 1},
-        'GpsHeading': {'interval_seconds': 1},
+        'GpsHeading': {'interval_seconds': 60},
         'HvacAutoMode': {'interval_seconds': 1},
         'HvacPower': {'interval_seconds': 1},
-        'InsideTemp': {'interval_seconds': 1, 'minimum_delta': 5},
+        'InsideTemp': {'interval_seconds': 60, 'minimum_delta': 1.0},
         'LocatedAtFavorite': {'interval_seconds': 1},
         'LocatedAtHome': {'interval_seconds': 1},
-        'Location': {'interval_seconds': 1, 'minimum_delta': 1000},
+        'Location': {'interval_seconds': 60, 'minimum_delta': 100},
         'Locked': {'interval_seconds': 1},
-        'MinutesToArrival': {'interval_seconds': 1, 'minimum_delta': 5},
-        'OutsideTemp': {'interval_seconds': 1, 'minimum_delta': 5},
-        'TimeToFullCharge': {'interval_seconds': 1, 'minimum_delta': 5},
-        'VehicleSpeed': {'interval_seconds': 1, 'minimum_delta': 5},
+        'MinutesToArrival': {'interval_seconds': 60},
+        'OutsideTemp': {'interval_seconds': 60, 'minimum_delta': 1.0},
+        'TimeToFullCharge': {'interval_seconds': 60},
+        'VehicleSpeed': {'interval_seconds': 60},
     }
 
     client: APIClient
@@ -65,18 +65,18 @@ class Account:
         certificate: str,
         vin: str,
         fields: dict[str, Any] = DEFAULT_FLEET_TELEMETRY_FIELDS,
-    ) -> None:
-        self.client.api_post(
-            'api/1/vehicles/fleet_telemetry_config',
+    ) -> dict[str, Any]:
+        return self.client.api_post(
+            '/api/1/vehicles/fleet_telemetry_config',
             json={
                 'config': {
                     'prefer_typed': True,
                     'hostname': hostname,
                     'port': port,
                     'ca': certificate,
-                    'vins': [vin],
                     'fields': fields,
                     'alert_types': ['service'],
-                }
+                },
+                'vins': [vin],
             }
-        )
+        ).json()

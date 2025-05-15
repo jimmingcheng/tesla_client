@@ -43,7 +43,6 @@ class ClimateState:
     - temperatures are in Fahrenheit
     """
     inside_temp: float
-    is_auto_conditioning_on: bool
     is_climate_on: bool
     outside_temp: float
 
@@ -140,7 +139,7 @@ class Vehicle:
     def set_cached_vehicle_data(self, vehicle_data: dict) -> None:
         self._cached_vehicle_data = vehicle_data
 
-    def load_vehicle_data(self) -> None:
+    def load_vehicle_data(self, should_wake: bool = True) -> None:
         VEHICLE_DATA_ENDPOINTS_QS = '%3B'.join([
             'charge_state',
             'climate_state',
@@ -158,14 +157,22 @@ class Vehicle:
                 f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
             ).json()['response']
         except VehicleAsleepError:
+            if not should_wake:
+                raise
+
             self.wake_up()
             vehicle_data_from_api = self.client.api_get(
                 f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
             ).json()['response']
 
-        vehicle_data_from_api['last_load_from_api'] = int(time.time())
+        now = int(time.time())
+        vehicle_data_from_api['last_update'] = now
+        vehicle_data_from_api['last_load_from_api'] = now
 
         self.set_cached_vehicle_data(vehicle_data_from_api)
+
+    def get_last_update(self) -> int | None:
+        return self.get_cached_vehicle_data().get('last_update', None)
 
     def get_last_load_from_api(self) -> int | None:
         return self.get_cached_vehicle_data().get('last_load_from_api', None)
