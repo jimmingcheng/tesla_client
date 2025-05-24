@@ -182,9 +182,15 @@ class FleetTelemetryListener:
                     try:
                         assert cvd_before[k1][k2] == v2
                     except KeyError:
-                        self.notify_vehicle_data_changed(k1, k2, None, v2)
+                        try:
+                            self.notify_vehicle_data_changed(payload.vin, k1, k2, None, v2)
+                        except Exception:
+                            logging.exception('Exception while notifying vehicle data change')
                     except AssertionError:
-                        self.notify_vehicle_data_changed(k1, k2, cvd_before[k1][k2], v2)
+                        try:
+                            self.notify_vehicle_data_changed(payload.vin, k1, k2, cvd_before[k1][k2], v2)
+                        except Exception:
+                            logging.exception('Exception while notifying vehicle data change')
 
-    def notify_vehicle_data_changed(self, k1: str, k2: str, value_before: Any, value_after: Any) -> None:
-        logging.info(f'Vehicle Data changed: {k1}.{k2}: {value_before} → {value_after}')
+    def notify_vehicle_data_changed(self, vin: str, k1: str, k2: str, value_before: Any, value_after: Any) -> None:
+        logging.info(f'Vehicle {vin} data changed: {k1}.{k2}: {value_before} → {value_after}')
