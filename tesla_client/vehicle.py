@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import Any
 from dataclasses import dataclass
 
 import random
@@ -11,6 +13,30 @@ from .client import VehicleAsleepError
 LEGACY_FLEET_TELEMETRY_VERSION = 'unknown'
 
 
+DEFAULT_FLEET_TELEMETRY_FIELDS = {
+    'BatteryLevel': {'interval_seconds': 60, 'minimum_delta': 1.0},
+    'ChargeLimitSoc': {'interval_seconds': 60, 'minimum_delta': 1.0},
+    'DestinationLocation': {'interval_seconds': 1},
+    'DestinationName': {'interval_seconds': 1},
+    'DetailedChargeState': {'interval_seconds': 1},
+    'EstBatteryRange': {'interval_seconds': 60, 'minimum_delta': 1.0},
+    'FastChargerPresent': {'interval_seconds': 1},
+    'Gear': {'interval_seconds': 1},
+    'GpsHeading': {'interval_seconds': 60},
+    'HvacAutoMode': {'interval_seconds': 1},
+    'HvacPower': {'interval_seconds': 1},
+    'InsideTemp': {'interval_seconds': 60, 'minimum_delta': 1.0},
+    'LocatedAtFavorite': {'interval_seconds': 1},
+    'LocatedAtHome': {'interval_seconds': 1},
+    'Location': {'interval_seconds': 60, 'minimum_delta': 100},
+    'Locked': {'interval_seconds': 1},
+    'MinutesToArrival': {'interval_seconds': 60},
+    'OutsideTemp': {'interval_seconds': 60, 'minimum_delta': 1.0},
+    'TimeToFullCharge': {'interval_seconds': 60},
+    'VehicleSpeed': {'interval_seconds': 60},
+}
+
+
 class VehicleNotFoundError(Exception):
     pass
 
@@ -21,6 +47,14 @@ class VehicleDidNotWakeError(Exception):
 
 class VehicleNotLoadedError(Exception):
     pass
+
+
+@dataclass
+class FleetTelemetryStatus:
+    virtual_key_required: bool
+    virtual_key_added: bool
+    fleet_telemetry_supported: bool
+    fleet_telemetry_paired: bool
 
 
 @dataclass
@@ -71,26 +105,11 @@ class VehicleState:
 
 
 class Vehicle:
-    DOC_WHITELIST = [
-        'vin',
-        'display_name',
-        'auto_conditioning_start',
-        'auto_conditioning_stop',
-        'charge_start',
-        'charge_stop',
-        'door_lock',
-        'door_unlock',
-        'flash_lights',
-        'honk_horn',
-        'navigation_request',
-        'set_charge_limit',
-    ]
-
     client: APIClient
     vin: str
     display_name: str
     online_as_of: int | None
-    _fleet_telemetry_version: str | None
+    _fleet_telemetry_status: FleetTelemetryStatus | None = None
     _cached_vehicle_data: dict
 
     def __init__(
@@ -102,7 +121,7 @@ class Vehicle:
         self.vin = vehicle_json['vin']
         self.display_name = vehicle_json['display_name']
         self.online_as_of = int(time.time()) if vehicle_json['state'] == 'online' else None
-        self._fleet_telemetry_version = None
+        self._fleet_telemetry_status = None
         self._cached_vehicle_data: dict = {}
 
     def wake_up(self) -> None:
@@ -118,20 +137,69 @@ class Vehicle:
 
         raise VehicleDidNotWakeError
 
-    def supports_fleet_telemetry(self) -> bool:
-        return self.get_fleet_telemetry_version() != LEGACY_FLEET_TELEMETRY_VERSION
+    def is_using_fleet_telemetry(self) -> bool:
+        return self.get_fleet_telemetry_status().fleet_telemetry_paired
 
-    def get_fleet_telemetry_version(self) -> str:
-        if self._fleet_telemetry_version is None:
-            self._fleet_telemetry_version = self.fetch_fleet_telemetry_version()
-        return self._fleet_telemetry_version
+    def get_fleet_telemetry_status(self) -> FleetTelemetryStatus:
+        if not self._fleet_telemetry_status:
+            self.refresh_fleet_telemetry_status()
 
-    def fetch_fleet_telemetry_version(self) -> str:
-        resp_json = self.client.api_post(
+        assert self._fleet_telemetry_status is not None
+
+        return self._fleet_telemetry_status
+
+    def set_fleet_telemetry_status(self, fleet_telemetry_status: FleetTelemetryStatus) -> None:
+        self._fleet_telemetry_status = fleet_telemetry_status
+
+    def refresh_fleet_telemetry_status(self) -> None:
+        fleet_status = self.client.api_post(
             '/api/1/vehicles/fleet_status',
             json={'vins': [self.vin]}
-        ).json()
-        return resp_json['response']['vehicle_info'][self.vin]['fleet_telemetry_version']
+        ).json()['response']
+
+        virtual_key_required = fleet_status['vehicle_info'][self.vin]['vehicle_command_protocol_required']
+        virtual_key_added = bool(self.vin in fleet_status['key_paired_vins'])
+        telemetry_version = fleet_status['vehicle_info'][self.vin]['fleet_telemetry_version']
+
+        fleet_config = self.client.api_get(
+            f'/api/1/vehicles/{self.vin}/fleet_telemetry_config',
+        ).json()['response']
+
+        self.set_fleet_telemetry_status(
+            FleetTelemetryStatus(
+                virtual_key_required=virtual_key_required,
+                virtual_key_added=virtual_key_added,
+                fleet_telemetry_supported=bool(telemetry_version != LEGACY_FLEET_TELEMETRY_VERSION),
+                fleet_telemetry_paired=bool(fleet_config['config']),
+            )
+        )
+
+    def pair_fleet_telemetry(
+        self,
+        hostname: str,
+        port: int,
+        certificate: str,
+        fields: dict[str, Any] = DEFAULT_FLEET_TELEMETRY_FIELDS,
+    ) -> None:
+        self.client.api_post(
+            '/api/1/vehicles/fleet_telemetry_config',
+            json={
+                'config': {
+                    'prefer_typed': True,
+                    'hostname': hostname,
+                    'port': port,
+                    'ca': certificate,
+                    'fields': fields,
+                    'alert_types': ['service'],
+                },
+                'vins': [self.vin],
+            }
+        )
+        self.refresh_fleet_telemetry_status()
+
+    def unpair_fleet_telemetry(self) -> None:
+        self.client.api_delete(f'/api/1/vehicles/{self.vin}/fleet_telemetry_config')
+        self.refresh_fleet_telemetry_status()
 
     def get_cached_vehicle_data(self) -> dict:
         return self._cached_vehicle_data
@@ -194,6 +262,9 @@ class Vehicle:
 
         return data
 
+    def get_vehicle_name(self) -> str:
+        return self.get_vehicle_state().vehicle_name
+
     def get_charge_state(self) -> ChargeState:
         return self._get_data_for_state('charge_state', ChargeState)  # type: ignore
 
@@ -246,7 +317,7 @@ class Vehicle:
     def navigation_request(self, location_and_address: str) -> None:
         # navigation requests are special and should go directly to the API HOST instead of being
         # routed through the vcmd proxy
-        APIClient(self.client.access_token, HOST).api_post(
+        self.client.api_post(
             '/api/1/vehicles/{}/command/navigation_request'.format(self.vin),
             json={
                 'type': 'share_ext_content_raw',
@@ -256,6 +327,7 @@ class Vehicle:
                     'android.intent.extra.TEXT': location_and_address,
                 },
             },
+            host_override=HOST,
         )
 
     def set_charge_limit(self, percent: int) -> None:

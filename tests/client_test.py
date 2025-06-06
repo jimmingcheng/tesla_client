@@ -11,10 +11,15 @@ VIN = '5YJ3E1EA7HF000000'
 VEHICLE_NAME = 'Red Car'
 
 
+class FakeAccount:
+    def get_fresh_access_token(self) -> str:
+        return ACCESS_TOKEN
+
+
 @pytest.fixture
 def mock_vehicle():
     return Vehicle(
-        client=APIClient(ACCESS_TOKEN),
+        client=APIClient(FakeAccount()),
         vehicle_json={'vin': VIN, 'display_name': VEHICLE_NAME, 'state': 'online'},
     )
 
