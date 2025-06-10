@@ -32,6 +32,14 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 6.0.1
+
+- remove fleet telemetry support checking by version
+
+### 6.0.0
+
+- fleet telemetry status checking capabilities
+
 ### 4.0.2
 
 - Relax python version requirement to 3.9

@@ -10,9 +10,6 @@ from .client import HOST
 from .client import VehicleAsleepError
 
 
-LEGACY_FLEET_TELEMETRY_VERSION = 'unknown'
-
-
 DEFAULT_FLEET_TELEMETRY_FIELDS = {
     'BatteryLevel': {'interval_seconds': 60, 'minimum_delta': 1.0},
     'ChargeLimitSoc': {'interval_seconds': 60, 'minimum_delta': 1.0},
@@ -53,7 +50,6 @@ class VehicleNotLoadedError(Exception):
 class FleetTelemetryStatus:
     virtual_key_required: bool
     virtual_key_added: bool
-    fleet_telemetry_supported: bool
     fleet_telemetry_paired: bool
 
 
@@ -157,9 +153,11 @@ class Vehicle:
             json={'vins': [self.vin]}
         ).json()['response']
 
+        import logging
+        logging.info(fleet_status)
+
         virtual_key_required = fleet_status['vehicle_info'][self.vin]['vehicle_command_protocol_required']
         virtual_key_added = bool(self.vin in fleet_status['key_paired_vins'])
-        telemetry_version = fleet_status['vehicle_info'][self.vin]['fleet_telemetry_version']
 
         fleet_config = self.client.api_get(
             f'/api/1/vehicles/{self.vin}/fleet_telemetry_config',
@@ -169,7 +167,6 @@ class Vehicle:
             FleetTelemetryStatus(
                 virtual_key_required=virtual_key_required,
                 virtual_key_added=virtual_key_added,
-                fleet_telemetry_supported=bool(telemetry_version != LEGACY_FLEET_TELEMETRY_VERSION),
                 fleet_telemetry_paired=bool(fleet_config['config']),
             )
         )
