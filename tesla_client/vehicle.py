@@ -171,7 +171,12 @@ class Vehicle:
             )
         )
 
-    def pair_fleet_telemetry(
+    def pair_fleet_telemetry(self) -> None:
+        raise NotImplementedError(
+            'Implement this method to call _pair_fleet_telemetry with desired parameters.'
+        )
+
+    def _pair_fleet_telemetry(
         self,
         hostname: str,
         port: int,
