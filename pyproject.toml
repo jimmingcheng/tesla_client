@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tesla-client"
-version = "6.1.0"
+version = "6.1.1"
 description = ""
 authors = ["Jimming Cheng <jimming@gmail.com>"]
 readme = "README.md"

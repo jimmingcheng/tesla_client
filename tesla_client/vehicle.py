@@ -1,9 +1,11 @@
 from __future__ import annotations
 from typing import Any
-from dataclasses import dataclass
 
 import random
 import time
+from dataclasses import dataclass
+
+import requests
 
 from .client import APIClient
 from .client import HOST
@@ -125,9 +127,12 @@ class Vehicle:
             # jitter to prevent burst of wakeup requests
             time.sleep(random.uniform(2, 10))
 
-            status = self.client.api_post(
-                '/api/1/vehicles/{}/wake_up'.format(self.vin)
-            ).json()['response']
+            try:
+                status = self.client.api_post(
+                    '/api/1/vehicles/{}/wake_up'.format(self.vin)
+                ).json()['response']
+            except requests.HTTPError:
+                raise VehicleDidNotWakeError
             if status and status['state'] == 'online':
                 return
 
@@ -260,7 +265,7 @@ class Vehicle:
                 if attempt < 2:
                     self.load_vehicle_data()
                 else:
-                    raise VehicleNotLoadedError
+                    raise VehicleDidNotWakeError
 
         return data
 
