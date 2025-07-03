@@ -32,6 +32,10 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 7.0.0
+
+- Make account accessible from Vehicle
+
 ### 6.1.1
 
 - Raise exception on wake up failure

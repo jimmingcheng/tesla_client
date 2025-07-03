@@ -1,8 +1,8 @@
 import pytest
 import requests_mock
 
-from tesla_client.client import APIClient
 from tesla_client.client import HOST
+from tesla_client.account import Account
 from tesla_client.vehicle import Vehicle
 
 
@@ -11,7 +11,7 @@ VIN = '5YJ3E1EA7HF000000'
 VEHICLE_NAME = 'Red Car'
 
 
-class FakeAccount:
+class FakeAccount(Account):
     def get_fresh_access_token(self) -> str:
         return ACCESS_TOKEN
 
@@ -19,7 +19,7 @@ class FakeAccount:
 @pytest.fixture
 def mock_vehicle():
     return Vehicle(
-        client=APIClient(FakeAccount()),
+        account=FakeAccount(),
         vehicle_json={'vin': VIN, 'display_name': VEHICLE_NAME, 'state': 'online'},
     )
 

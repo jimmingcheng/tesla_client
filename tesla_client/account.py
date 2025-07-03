@@ -24,7 +24,7 @@ class Account(ABC):
         ).json()['response']
 
         return [
-            self.vehicle_cls(self.client, vehicle_json)
+            self.vehicle_cls(self, vehicle_json)
             for vehicle_json in vehicles_json
         ]
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any
+from typing import TYPE_CHECKING
 
 import random
 import time
@@ -7,9 +8,12 @@ from dataclasses import dataclass
 
 import requests
 
-from .client import APIClient
 from .client import HOST
 from .client import VehicleAsleepError
+
+
+if TYPE_CHECKING:
+    from .account import Account
 
 
 DEFAULT_FLEET_TELEMETRY_FIELDS = {
@@ -103,7 +107,7 @@ class VehicleState:
 
 
 class Vehicle:
-    client: APIClient
+    account: 'Account'
     vin: str
     display_name: str
     online_as_of: int | None
@@ -112,10 +116,10 @@ class Vehicle:
 
     def __init__(
         self,
-        client: APIClient,
+        account: 'Account',
         vehicle_json: dict,
     ) -> None:
-        self.client = client
+        self.account = account
         self.vin = vehicle_json['vin']
         self.display_name = vehicle_json['display_name']
         self.online_as_of = int(time.time()) if vehicle_json['state'] == 'online' else None
@@ -128,7 +132,7 @@ class Vehicle:
             time.sleep(random.uniform(2, 10))
 
             try:
-                status = self.client.api_post(
+                status = self.account.client.api_post(
                     '/api/1/vehicles/{}/wake_up'.format(self.vin)
                 ).json()['response']
             except requests.HTTPError:
@@ -153,7 +157,7 @@ class Vehicle:
         self._fleet_telemetry_status = fleet_telemetry_status
 
     def refresh_fleet_telemetry_status(self) -> None:
-        fleet_status = self.client.api_post(
+        fleet_status = self.account.client.api_post(
             '/api/1/vehicles/fleet_status',
             json={'vins': [self.vin]}
         ).json()['response']
@@ -164,7 +168,7 @@ class Vehicle:
         virtual_key_required = fleet_status['vehicle_info'][self.vin]['vehicle_command_protocol_required']
         virtual_key_added = bool(self.vin in fleet_status['key_paired_vins'])
 
-        fleet_config = self.client.api_get(
+        fleet_config = self.account.client.api_get(
             f'/api/1/vehicles/{self.vin}/fleet_telemetry_config',
         ).json()['response']
 
@@ -188,7 +192,7 @@ class Vehicle:
         certificate: str,
         fields: dict[str, Any] = DEFAULT_FLEET_TELEMETRY_FIELDS,
     ) -> None:
-        self.client.api_post(
+        self.account.client.api_post(
             '/api/1/vehicles/fleet_telemetry_config',
             json={
                 'config': {
@@ -205,7 +209,7 @@ class Vehicle:
         self.refresh_fleet_telemetry_status()
 
     def unpair_fleet_telemetry(self) -> None:
-        self.client.api_delete(f'/api/1/vehicles/{self.vin}/fleet_telemetry_config')
+        self.account.client.api_delete(f'/api/1/vehicles/{self.vin}/fleet_telemetry_config')
         self.refresh_fleet_telemetry_status()
 
     def get_cached_vehicle_data(self) -> dict:
@@ -228,7 +232,7 @@ class Vehicle:
         ])
 
         try:
-            vehicle_data_from_api = self.client.api_get(
+            vehicle_data_from_api = self.account.client.api_get(
                 f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
             ).json()['response']
         except VehicleAsleepError:
@@ -236,7 +240,7 @@ class Vehicle:
                 raise
 
             self.wake_up()
-            vehicle_data_from_api = self.client.api_get(
+            vehicle_data_from_api = self.account.client.api_get(
                 f'/api/1/vehicles/{self.vin}/vehicle_data?endpoints={VEHICLE_DATA_ENDPOINTS_QS}',
             ).json()['response']
 
@@ -286,13 +290,13 @@ class Vehicle:
 
     def _command(self, command, json: dict | None = None) -> None:
         try:
-            self.client.api_post(
+            self.account.client.api_post(
                 '/api/1/vehicles/{}/command/{}'.format(self.vin, command),
                 json=json,
             )
         except VehicleAsleepError:
             self.wake_up()
-            self.client.api_post(
+            self.account.client.api_post(
                 '/api/1/vehicles/{}/command/{}'.format(self.vin, command),
                 json=json,
             )
@@ -324,7 +328,7 @@ class Vehicle:
     def navigation_request(self, location_and_address: str) -> None:
         # navigation requests are special and should go directly to the API HOST instead of being
         # routed through the vcmd proxy
-        self.client.api_post(
+        self.account.client.api_post(
             '/api/1/vehicles/{}/command/navigation_request'.format(self.vin),
             json={
                 'type': 'share_ext_content_raw',
