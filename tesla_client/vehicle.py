@@ -247,6 +247,7 @@ class Vehicle:
         now = int(time.time())
         vehicle_data_from_api['last_update'] = now
         vehicle_data_from_api['last_load_from_api'] = now
+        vehicle_data_from_api['location'] = {'located_at_home': None}
 
         self.set_cached_vehicle_data(vehicle_data_from_api)
 
@@ -287,6 +288,10 @@ class Vehicle:
 
     def get_vehicle_state(self) -> VehicleState:
         return self._get_data_for_state('vehicle_state', VehicleState)  # type: ignore
+
+    def is_located_at_home(self) -> bool | None:
+        cvd = self.get_cached_vehicle_data()
+        return cvd.get('location', {}).get('located_at_home', None)
 
     def _command(self, command, json: dict | None = None) -> None:
         try:

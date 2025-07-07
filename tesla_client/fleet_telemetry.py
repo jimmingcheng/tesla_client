@@ -172,6 +172,9 @@ class FleetTelemetryListener:
         if Field.Locked in data_dict:
             cvd['vehicle_state']['locked'] = data_dict[Field.Locked].boolean_value
 
+        if Field.LocatedAtHome in data_dict:
+            cvd['location']['located_at_home'] = data_dict[Field.LocatedAtHome].boolean_value
+
         cvd['last_update'] = int(time.time())
 
         vehicle.set_cached_vehicle_data(cvd)

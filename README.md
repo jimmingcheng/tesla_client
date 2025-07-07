@@ -32,6 +32,10 @@ Tesla, Inc. does not endorse or support this python library.
 
 ## Versions
 
+### 7.1.0
+
+- Add support for LocatedAtHome tracking
+
 ### 7.0.0
 
 - Make account accessible from Vehicle
